@@ -30,7 +30,26 @@ var FN = "https://kwirafdwfffpbtycmctx.supabase.co/functions/v1/window";
 var k = new URLSearchParams(location.search).get("k");
 var main = document.getElementById("fc-main");
 
-async function render() {
+// Put the page back where it was. Anchoring to the SECTION rather than to a
+// pixel offset is what makes this hold: the list above shrank by one item
+// when the thing was marked done, so a raw scroll position would land you a
+// row or two off. If the whole section went away — that was its last item —
+// fall back to the old pixel position, clamped to the shorter page.
+function restore(keep) {
+  if (!keep) { window.scrollTo(0, 0); return; }
+  var el = keep.id ? document.getElementById(keep.id) : null;
+  if (el) {
+    var y = el.getBoundingClientRect().top + window.pageYOffset - keep.offset;
+    window.scrollTo(0, Math.max(0, y));
+    return;
+  }
+  var max = Math.max(0, document.body.scrollHeight - window.innerHeight);
+  window.scrollTo(0, Math.min(keep.y || 0, max));
+}
+
+// keep: optional {id, offset, y} recorded before a Mark done, so the page
+// comes back to where you were reading instead of snapping to the top.
+async function render(keep) {
   if (!k) { main.innerHTML = "<h1>This page needs its key. Check the bookmark.</h1>"; return; }
   try {
     var r = await fetch(FN + "?k=" + encodeURIComponent(k), { cache: "no-store" });
@@ -48,7 +67,7 @@ async function render() {
     }
     var m = doc.querySelector("main");
     main.innerHTML = m ? m.innerHTML : doc.body.innerHTML;
-    window.scrollTo(0, 0);
+    restore(keep);
   } catch (e) {
     main.innerHTML = "<h1>Couldn&rsquo;t reach the window. Tap Refresh to try again.</h1>";
   }
@@ -73,11 +92,15 @@ document.addEventListener("click", async function (e) {
   var a = e.target && e.target.closest ? e.target.closest("a.done") : null;
   if (!a) return;
   e.preventDefault();
+  var sec = a.closest("section[id]");
+  var keep = sec
+    ? { id: sec.id, offset: sec.getBoundingClientRect().top, y: window.pageYOffset }
+    : { id: null, offset: 0, y: window.pageYOffset };
   a.textContent = "Marking…";
   try {
     var r = await fetch(a.href + "&ajax=1");
     var j = await r.json();
-    if (j.ok) { render(); }
+    if (j.ok) { render(keep); }
     else { a.textContent = "Failed: " + (j.reason || "unknown"); }
   } catch (err) {
     a.textContent = "Didn’t send — tap again";
