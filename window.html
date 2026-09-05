@@ -88,6 +88,39 @@ document.addEventListener("click", function (e) {
   if (panel) setTimeout(function () { panel.open = false; }, 60);
 });
 
+// Saving a note: post the text, tell him it landed, then re-render so the
+// note echoes back under its item. Same scroll-keeping as Mark done, because
+// having the page jump after dictating a sentence is worse, not better.
+document.addEventListener("submit", async function (e) {
+  var f = e.target && e.target.closest ? e.target.closest("form.notef") : null;
+  if (!f) return;
+  e.preventDefault();
+  var box = f.querySelector("textarea");
+  var btn = f.querySelector("button");
+  var text = (box && box.value || "").trim();
+  if (!text) { if (box) box.focus(); return; }
+  var sec = f.closest("section[id]");
+  var keep = sec
+    ? { id: sec.id, offset: sec.getBoundingClientRect().top, y: window.pageYOffset }
+    : { id: null, offset: 0, y: window.pageYOffset };
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    var r = await fetch(FN + "?note=1&o=" + encodeURIComponent(f.dataset.o)
+      + "&t=" + encodeURIComponent(f.dataset.t) + "&k=" + encodeURIComponent(k), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ note: text }),
+    });
+    var j = await r.json();
+    if (j.ok) { render(keep); }
+    else { btn.disabled = false; btn.textContent = "Didn't save: " + (j.reason || "unknown"); }
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Didn't send — tap again";
+  }
+});
+
 document.addEventListener("click", async function (e) {
   var a = e.target && e.target.closest ? e.target.closest("a.done") : null;
   if (!a) return;
